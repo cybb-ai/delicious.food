@@ -1,5 +1,5 @@
 /* 煎好日 service worker: offline shell + runtime caching */
-var VERSION = 'jgd-v1';
+var VERSION = 'jgd-v2';
 var CORE = [
   './',
   'index.html',
