@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI3 南港美食 3D 午餐選擇器</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* ========== 1. CSS Reset & Canvas 全螢幕佈局 ========== */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  color:#f4f1ea;background:#0f1424;
+}
+#canvas-container{position:fixed;inset:0;z-index:0}
+#canvas-container canvas{display:block;cursor:grab}
+#canvas-container canvas:active{cursor:grabbing}
+
+/* ========== 2. 控制面板 UI（玻璃擬態） ========== */
+.glass{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.16);
+  backdrop-filter:blur(14px) saturate(140%);
+  -webkit-backdrop-filter:blur(14px) saturate(140%);
+  box-shadow:0 10px 40px rgba(0,0,0,.35);
+}
+#header{
+  position:fixed;top:16px;left:16px;right:16px;z-index:5;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 20px;border-radius:16px;
+}
+#header h1{font-size:18px;font-weight:700;letter-spacing:.5px}
+#header h1 i{color:#ffb547;margin-right:8px}
+#header .sub{font-size:12px;opacity:.7}
+#ui-container{
+  position:fixed;top:88px;left:16px;bottom:16px;z-index:5;width:300px;
+  border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:18px;
+  overflow-y:auto;
+}
+.section-title{font-size:13px;font-weight:700;opacity:.85;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.section-title i{color:#ffb547;width:14px;text-align:center}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg label,.chips label{position:relative;cursor:pointer}
+.seg input,.chips input{position:absolute;opacity:0;pointer-events:none}
+.seg span,.chips span{
+  display:block;text-align:center;padding:9px 4px;border-radius:10px;font-size:13px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);transition:.15s;
+}
+.seg input:checked+span,.chips input:checked+span{
+  background:linear-gradient(135deg,#ff8a3d,#ffb547);color:#2a1600;border-color:transparent;font-weight:700;
+}
+.seg input:focus-visible+span,.chips input:focus-visible+span,.switch input:focus-visible+.track{outline:2px solid #fff;outline-offset:2px}
+.hint-small{font-size:11px;opacity:.6;margin-top:6px;line-height:1.5}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.switch{display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:14px}
+.switch input{position:absolute;opacity:0}
+.switch .track{width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,.18);position:relative;transition:.2s;flex-shrink:0}
+.switch .track::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+.switch input:checked+.track{background:#ff8a3d}
+.switch input:checked+.track::after{left:23px}
+#count-box{
+  padding:12px 14px;border-radius:12px;background:rgba(0,0,0,.25);font-size:13px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+#count-box b{font-size:22px;color:#ffb547;font-variant-numeric:tabular-nums}
+#count-box.zero b{color:#ff6b6b}
+#zero-hint{display:none;font-size:12px;color:#ffb3b3;line-height:1.5}
+#zero-hint.show{display:block}
+.btn{
+  border:none;cursor:pointer;font:inherit;font-weight:700;border-radius:12px;
+  padding:13px 16px;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.15s;
+}
+.btn-primary{background:linear-gradient(135deg,#ff6a3d,#ffb547);color:#2a1600;box-shadow:0 6px 20px rgba(255,138,61,.4)}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 26px rgba(255,138,61,.55)}
+.btn-primary:disabled{background:#555b6e;color:#a7abb8;box-shadow:none;cursor:not-allowed}
+.btn-ghost{background:rgba(255,255,255,.1);color:#f4f1ea;border:1px solid rgba(255,255,255,.18)}
+.btn-ghost:hover{background:rgba(255,255,255,.18)}
+.btn-map{background:#2f80ed;color:#fff}
+.btn-map:hover{background:#2b6fcc}
+#spin-btn{width:100%;margin-top:auto}
+details.add-box summary{cursor:pointer;font-size:13px;opacity:.8;list-style:none}
+details.add-box summary::-webkit-details-marker{display:none}
+details.add-box[open] summary{margin-bottom:10px}
+.add-form{display:flex;flex-direction:column;gap:8px;font-size:12px}
+.add-form input[type=text],.add-form input[type=number]{
+  width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);
+  background:rgba(0,0,0,.25);color:#fff;font:inherit;font-size:13px;
+}
+.add-form .row{display:flex;gap:8px;align-items:center}
+.add-form .cat-row{display:flex;flex-wrap:wrap;gap:6px 10px}
+.add-form .cat-row label{display:flex;align-items:center;gap:4px}
+.add-form .btn{padding:8px;font-size:13px}
+#custom-list{font-size:12px;display:flex;flex-direction:column;gap:4px;margin-top:6px}
+#custom-list div{display:flex;justify-content:space-between;align-items:center;gap:6px;opacity:.85}
+#custom-list button{background:none;border:none;color:#ff9b9b;cursor:pointer;font-size:12px}
+
+#status-tip{
+  position:fixed;bottom:24px;left:calc(50% + 158px);transform:translateX(-50%);z-index:4;
+  font-size:13px;opacity:.65;pointer-events:none;white-space:nowrap;
+}
+
+/* ========== 3. 結果彈窗與按鈕樣式 ========== */
+#result-modal{
+  position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,10,20,.45);transition:opacity .25s;padding:16px;
+}
+#result-modal.hidden{opacity:0;pointer-events:none}
+.modal-card{
+  width:min(420px,100%);border-radius:22px;padding:28px 26px 22px;text-align:center;
+  background:rgba(30,34,52,.82);transform:scale(1);transition:transform .3s cubic-bezier(.2,1.4,.4,1);
+}
+#result-modal.hidden .modal-card{transform:scale(.85)}
+.modal-card .kicker{font-size:13px;letter-spacing:2px;color:#ffb547;font-weight:700}
+.modal-card h2{font-size:26px;margin:10px 0 6px;line-height:1.3}
+.modal-card .area{font-size:13px;opacity:.65;margin-bottom:14px}
+.modal-card .dist{font-size:15px;margin-bottom:14px}
+.modal-card .dist i{color:#ffb547;margin-right:6px}
+.tags{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:22px}
+.tag{font-size:12px;padding:5px 10px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15)}
+.tag.ac{background:rgba(80,180,255,.18);border-color:rgba(80,180,255,.4)}
+.tag.price{background:rgba(255,181,71,.18);border-color:rgba(255,181,71,.4)}
+.modal-actions{display:flex;flex-direction:column;gap:8px}
+.modal-actions .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ========== 4. 手機版 ========== */
+@media (max-width:760px){
+  #header{top:10px;left:10px;right:10px;padding:10px 14px}
+  #header h1{font-size:15px}
+  #header .sub{display:none}
+  #ui-container{
+    top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:48vh;padding:14px;gap:12px;
+  }
+  #status-tip{left:50%;bottom:auto;top:70px}
+}
+</style>
+<!-- 引進 Three.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<!-- 3D 畫布容器 -->
+<div id="canvas-container"></div>
+
+<!-- Header -->
+<header id="header" class="glass">
+  <h1><i class="fa-solid fa-utensils"></i>AI3 南港午餐 3D 決策器</h1>
+  <span class="sub">南港軟體園區 · 半徑 2 公里</span>
+</header>
+
+<!-- 前端篩選 UI 層 -->
+<aside id="ui-container" class="glass" aria-label="篩選條件">
+  <div>
+    <div class="section-title"><i class="fa-solid fa-person-walking"></i>距離選擇</div>
+    <div class="seg" role="radiogroup">
+      <label><input type="radio" name="dist" value="500"><span>500m</span></label>
+      <label><input type="radio" name="dist" value="1000"><span>1km</span></label>
+      <label><input type="radio" name="dist" value="2000" checked><span>2km</span></label>
+    </div>
+    <p class="hint-small" id="dist-hint"></p>
+  </div>
+
+  <div>
+    <div class="section-title"><i class="fa-solid fa-snowflake"></i>環境條件</div>
+    <label class="switch">必須有冷氣
+      <input type="checkbox" id="ac-only" checked><span class="track"></span>
+    </label>
+  </div>
+
+  <div>
+    <div class="section-title"><i class="fa-solid fa-bowl-food"></i>種類（可複選）</div>
+    <div class="chips" id="cat-chips"></div>
+  </div>
+
+  <div id="count-box"><span>符合條件的餐廳</span><b id="count">0</b></div>
+  <p id="zero-hint"><i class="fa-solid fa-circle-exclamation"></i> 沒有符合條件的餐廳，試著放寬距離、取消「必須有冷氣」或多勾幾個種類。</p>
+
+  <details class="add-box">
+    <summary><i class="fa-solid fa-plus"></i> 新增自訂餐廳（存在本機瀏覽器）</summary>
+    <form class="add-form" id="add-form">
+      <input type="text" id="add-name" placeholder="餐廳名稱" required maxlength="30">
+      <div class="row">
+        <input type="number" id="add-dist" placeholder="距離（公尺）" min="50" max="2000" required>
+        <label style="white-space:nowrap"><input type="checkbox" id="add-ac" checked> 有冷氣</label>
+      </div>
+      <div class="cat-row" id="add-cats"></div>
+      <button class="btn btn-ghost" type="submit"><i class="fa-solid fa-floppy-disk"></i> 加入輪盤</button>
+      <div id="custom-list"></div>
+    </form>
+  </details>
+
+  <button class="btn btn-primary" id="spin-btn"><i class="fa-solid fa-dice"></i> 開始決策！</button>
+</aside>
+
+<div id="status-tip">拖曳可以轉動視角 · 按「開始決策！」抽籤</div>
+
+<!-- 結果彈窗層 -->
+<div id="result-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="r-name">
+  <div class="modal-card glass">
+    <div class="kicker">今天中午就吃</div>
+    <h2 id="r-name">—</h2>
+    <div class="area" id="r-area"></div>
+    <div class="dist" id="r-dist"></div>
+    <div class="tags" id="r-tags"></div>
+    <div class="modal-actions">
+      <a class="btn btn-map" id="r-map" target="_blank" rel="noopener"><i class="fa-solid fa-location-arrow"></i> 開啟 Google 地圖導航</a>
+      <div class="row">
+        <button class="btn btn-ghost" id="r-again"><i class="fa-solid fa-rotate-right"></i> 不滿意，再抽</button>
+        <button class="btn btn-ghost" id="r-refilter"><i class="fa-solid fa-sliders"></i> 重新篩選</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+ * 1. 餐廳資料庫（AI3／南港軟體園區 方圓 2km）
+ *    distanceMeters 為由南港軟體園區（三重路）出發的估計步行距離
+ * ===================================================================== */
+const CATEGORIES = ['麵', '飯', '鍋貼/水餃', '漢堡/美式', '小吃/其他', '健康餐/沙拉'];
+
+const BASE_RESTAURANTS = [
+  { id:'rest_001', name:'樂法 Le Phu', distanceMeters:300, hasAC:true, categories:['漢堡/美式','健康餐/沙拉'], priceRange:'$', area:'南軟園區周邊' },
+  { id:'rest_002', name:'朱記餡餅粥店 (南港環球店)', distanceMeters:1500, hasAC:true, categories:['麵','飯','鍋貼/水餃'], priceRange:'$$', area:'Global Mall 南港環球購物中心' },
+  { id:'rest_003', name:'麻布茶房 南港中信店', distanceMeters:300, hasAC:true, categories:['飯'], priceRange:'$$', area:'中信金融園區 C棟 1F（經貿二路186-1號）' },
+  { id:'rest_004', name:'gonna 共樂遊 南港店', distanceMeters:300, hasAC:true, categories:['健康餐/沙拉','麵'], priceRange:'$$', area:'中信金融園區 C棟 1F' },
+  { id:'rest_005', name:'PappaRich 金爸爸 南港中信店', distanceMeters:350, hasAC:true, categories:['飯','麵'], priceRange:'$$', area:'中信金融園區' },
+  { id:'rest_006', name:'Coppii Lumii 冉冉生活', distanceMeters:500, hasAC:true, categories:['漢堡/美式','麵'], priceRange:'$$', area:'老爺行旅旁 1F' },
+  { id:'rest_007', name:'涮嘴 南港店', distanceMeters:700, hasAC:true, categories:['小吃/其他','飯'], priceRange:'$', area:'南軟園區周邊' },
+  { id:'rest_008', name:'陶膳日式料理', distanceMeters:700, hasAC:true, categories:['飯'], priceRange:'$$', area:'南港展覽館附近（午間御便當）' },
+  { id:'rest_009', name:'這一小鍋 南港店', distanceMeters:1500, hasAC:true, categories:['小吃/其他'], priceRange:'$$', area:'CITYLINK 南港 A棟 3F' },
+  { id:'rest_010', name:'好好食房 南港店', distanceMeters:1500, hasAC:true, categories:['飯','健康餐/沙拉'], priceRange:'$$', area:'CITYLINK 南港 C棟 7F' },
+  { id:'rest_011', name:'靜岡勝政日式豬排', distanceMeters:1500, hasAC:true, categories:['飯'], priceRange:'$$', area:'CITYLINK 南港' },
+  { id:'rest_012', name:'晶湯匙泰式主題餐坊', distanceMeters:1500, hasAC:true, categories:['飯'], priceRange:'$$$', area:'CITYLINK 南港' },
+  { id:'rest_013', name:'22:02 火鍋樂活 南港店', distanceMeters:1500, hasAC:true, categories:['小吃/其他','健康餐/沙拉'], priceRange:'$$', area:'CITYLINK 南港 C棟 10F' },
+  { id:'rest_014', name:'紅豆小館', distanceMeters:1500, hasAC:true, categories:['飯','麵'], priceRange:'$$', area:'CITYLINK 南港' },
+];
+
+const STORAGE_KEY = 'ai3-lunch-custom-v1';
+function loadCustom(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e){ return []; }
+}
+function saveCustom(list){
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch(e){}
+}
+let customRestaurants = loadCustom();
+const allRestaurants = () => BASE_RESTAURANTS.concat(customRestaurants);
+
+function mapUrl(r){
+  if (r.googleMapUrl) return r.googleMapUrl;
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(r.name + ' 台北 南港');
+}
+
+/* =====================================================================
+ * 2. Three.js 場景、相機、渲染器、燈光初始化
+ * ===================================================================== */
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0f1424);
+scene.fog = new THREE.Fog(0x0f1424, 18, 40);
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const dirLight = new THREE.DirectionalLight(0xfff1dc, 0.9);
+dirLight.position.set(4, 6, 10);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+scene.add(dirLight);
+const rimLight = new THREE.PointLight(0xff8a3d, 0.7, 30);
+rimLight.position.set(-6, -3, 4);
+scene.add(rimLight);
+
+// 背景點點星空
+(function addBackdrop(){
+  const g = new THREE.BufferGeometry();
+  const n = 400, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++){
+    pos[i*3] = (Math.random() - .5) * 60;
+    pos[i*3+1] = (Math.random() - .5) * 40;
+    pos[i*3+2] = -8 - Math.random() * 20;
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color:0xffd9a8, size:0.08, transparent:true, opacity:.6 })));
+})();
+
+// 地板（承接陰影）
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(9, 64),
+  new THREE.ShadowMaterial({ opacity:0.25 })
+);
+floor.position.z = -1.2;
+floor.receiveShadow = true;
+
+/* 輪盤結構：stage（可拖曳傾斜） → wheel（抽籤時繞 Z 軸旋轉） */
+const stage = new THREE.Group();
+scene.add(stage);
+stage.add(floor);
+const wheel = new THREE.Group();
+stage.add(wheel);
+
+const WHEEL_R = 4;
+const WHEEL_DEPTH = 0.45;
+
+// 中心軸蓋
+const hub = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.7, 0.7, 0.35, 48),
+  new THREE.MeshStandardMaterial({ color:0xffb547, metalness:.6, roughness:.3 })
+);
+hub.rotation.x = Math.PI / 2;
+hub.position.z = WHEEL_DEPTH + 0.17;
+hub.castShadow = true;
+stage.add(hub);
+const hubIcon = makeLabelSprite('AI3', 256, 128, '#2a1600', 'bold 72px sans-serif');
+hubIcon.position.z = WHEEL_DEPTH + 0.36;
+hubIcon.scale.set(1.0, 0.5, 1);
+stage.add(hubIcon);
+
+// 外框圓環
+const rim = new THREE.Mesh(
+  new THREE.TorusGeometry(WHEEL_R + 0.08, 0.14, 16, 120),
+  new THREE.MeshStandardMaterial({ color:0xffd28a, metalness:.7, roughness:.25 })
+);
+rim.position.z = WHEEL_DEPTH / 2;
+rim.castShadow = true;
+stage.add(rim);
+
+// 外框燈泡
+const bulbs = [];
+for (let i = 0; i < 24; i++){
+  const a = i / 24 * Math.PI * 2;
+  const b = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 12, 12),
+    new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xffb547, emissiveIntensity:1 })
+  );
+  b.position.set(Math.cos(a) * (WHEEL_R + 0.08), Math.sin(a) * (WHEEL_R + 0.08), WHEEL_DEPTH / 2 + 0.16);
+  stage.add(b);
+  bulbs.push(b);
+}
+
+// 頂部指針（三角錐朝下）
+const pointer = new THREE.Group();
+const cone = new THREE.Mesh(
+  new THREE.ConeGeometry(0.32, 0.8, 4),
+  new THREE.MeshStandardMaterial({ color:0xff4d4d, metalness:.3, roughness:.35 })
+);
+cone.rotation.z = Math.PI;
+cone.castShadow = true;
+pointer.add(cone);
+const knob = new THREE.Mesh(
+  new THREE.SphereGeometry(0.22, 20, 20),
+  new THREE.MeshStandardMaterial({ color:0xffffff, metalness:.5, roughness:.2 })
+);
+knob.position.y = 0.42;
+pointer.add(knob);
+pointer.position.set(0, WHEEL_R + 0.45, WHEEL_DEPTH + 0.25);
+stage.add(pointer);
+
+/* =====================================================================
+ * 3. 動態 3D 輪盤生成（Canvas 繪製文字貼圖）
+ * ===================================================================== */
+const PALETTE = [0xff6b4a, 0xffb547, 0x46c2a8, 0x4a8fe7, 0xa56cf0, 0xf06c9b, 0x7bc95a, 0xf2a03d];
+
+function makeLabelSprite(text, w, h, color, font){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = color; ctx.font = font;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, h / 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  return new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map:tex, transparent:true }));
+}
+
+function makeSectorTexture(name, maxWidthPx){
+  const W = 1024, H = 160;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const family = '"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif';
+  let size = 84;
+  ctx.font = `800 ${size}px ${family}`;
+  while (ctx.measureText(name).width > maxWidthPx && size > 34){
+    size -= 3;
+    ctx.font = `800 ${size}px ${family}`;
+  }
+  let text = name;
+  if (ctx.measureText(text).width > maxWidthPx){
+    while (text.length > 2 && ctx.measureText(text + '…').width > maxWidthPx) text = text.slice(0, -1);
+    text += '…';
+  }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,.35)';
+  ctx.strokeText(text, W - 24, H / 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(text, W - 24, H / 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+let sectors = [];   // { restaurant, centerAngle, mesh }
+let currentList = [];
+
+function disposeWheel(){
+  while (wheel.children.length){
+    const obj = wheel.children.pop();
+    obj.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material){
+        if (o.material.map) o.material.map.dispose();
+        o.material.dispose();
+      }
+    });
+  }
+  sectors = [];
+}
+
+function buildWheel(list){
+  disposeWheel();
+  currentList = list;
+  if (!list.length){
+    // 空輪盤：灰色圓盤
+    const empty = new THREE.Mesh(
+      new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, WHEEL_DEPTH, 64),
+      new THREE.MeshStandardMaterial({ color:0x3a3f52, roughness:.8 })
+    );
+    empty.rotation.x = Math.PI / 2;
+    empty.position.z = WHEEL_DEPTH / 2;
+    wheel.add(empty);
+    const q = makeLabelSprite('沒有符合條件的餐廳', 1024, 160, '#c5c8d4', '700 64px sans-serif');
+    q.scale.set(5, 0.78, 1);
+    q.position.set(0, -1.6, WHEEL_DEPTH + 0.02);
+    wheel.add(q);
+    return;
+  }
+
+  const n = list.length;
+  const seg = Math.PI * 2 / n;
+  // 色票：避免相鄰同色（包含首尾）
+  const colorFor = i => {
+    let idx = i % PALETTE.length;
+    if (i === n - 1 && n > 1 && idx === 0) idx = 3;
+    return PALETTE[idx];
+  };
+
+  list.forEach((r, i) => {
+    const a0 = i * seg, a1 = (i + 1) * seg;
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.absarc(0, 0, WHEEL_R, a0, a1, false);
+    shape.lineTo(0, 0);
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth:WHEEL_DEPTH, bevelEnabled:true, bevelThickness:0.04, bevelSize:0.03, bevelSegments:2, curveSegments:Math.max(8, Math.ceil(64 / n))
+    });
+    const mat = new THREE.MeshStandardMaterial({ color:colorFor(i), roughness:.45, metalness:.12, emissive:0x000000 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    wheel.add(mesh);
+
+    // 文字貼圖：沿半徑方向，文字靠外緣對齊
+    const center = a0 + seg / 2;
+    const labelLen = WHEEL_R - 0.95;     // 世界單位：從中心蓋外到外緣
+    // 扇形越窄，文字越矮
+    const arcAtMid = Math.min(seg * (WHEEL_R * 0.62), 0.75);
+    const labelH = Math.max(0.22, arcAtMid);
+    const tex = makeSectorTexture(r.name, 1024 - 48);
+    const label = new THREE.Mesh(
+      new THREE.PlaneGeometry(labelLen, labelLen * 160 / 1024 > labelH ? labelH : labelLen * 160 / 1024),
+      new THREE.MeshBasicMaterial({ map:tex, transparent:true, depthWrite:false })
+    );
+    const rMid = 0.85 + labelLen / 2;
+    label.position.set(Math.cos(center) * rMid, Math.sin(center) * rMid, WHEEL_DEPTH + 0.05);
+    label.rotation.z = center;
+    wheel.add(label);
+
+    // 分隔金線
+    const line = new THREE.Mesh(
+      new THREE.BoxGeometry(WHEEL_R - 0.7, 0.04, 0.06),
+      new THREE.MeshStandardMaterial({ color:0xfff1d0, metalness:.8, roughness:.2 })
+    );
+    const lr = 0.7 + (WHEEL_R - 0.7) / 2;
+    line.position.set(Math.cos(a0) * lr, Math.sin(a0) * lr, WHEEL_DEPTH + 0.05);
+    line.rotation.z = a0;
+    if (n > 1) wheel.add(line);
+
+    sectors.push({ restaurant:r, centerAngle:center, mesh, label });
+  });
+}
+
+/* =====================================================================
+ * 4. 篩選條件過濾邏輯
+ * ===================================================================== */
+const $ = s => document.querySelector(s);
+const catChips = $('#cat-chips');
+const addCats = $('#add-cats');
+CATEGORIES.forEach(c => {
+  catChips.insertAdjacentHTML('beforeend', `<label><input type="checkbox" value="${c}" checked><span>${c}</span></label>`);
+  addCats.insertAdjacentHTML('beforeend', `<label><input type="checkbox" value="${c}"> ${c}</label>`);
+});
+
+const DIST_HINTS = {
+  500:'軟體園區內 / 步行約 5–7 分鐘',
+  1000:'南港展覽館周邊 / 步行約 12 分鐘',
+  2000:'含南港車站 CITYLINK、環球購物中心',
+};
+
+function getFilters(){
+  return {
+    maxDist:+document.querySelector('input[name=dist]:checked').value,
+    acOnly:$('#ac-only').checked,
+    cats:[...catChips.querySelectorAll('input:checked')].map(i => i.value),
+  };
+}
+
+function filterRestaurants(f){
+  return allRestaurants().filter(r =>
+    r.distanceMeters <= f.maxDist &&
+    (!f.acOnly || r.hasAC) &&
+    r.categories.some(c => f.cats.includes(c))
+  );
+}
+
+let lastKey = '';
+function refresh(){
+  if (spinning) return;
+  const f = getFilters();
+  const list = filterRestaurants(f);
+  $('#dist-hint').textContent = DIST_HINTS[f.maxDist];
+  $('#count').textContent = list.length;
+  $('#count-box').classList.toggle('zero', list.length === 0);
+  $('#zero-hint').classList.toggle('show', list.length === 0);
+  $('#spin-btn').disabled = list.length === 0;
+  const key = list.map(r => r.id).join('|');
+  if (key !== lastKey){
+    lastKey = key;
+    buildWheel(list);
+    highlight(-1);
+  }
+}
+
+document.querySelectorAll('#ui-container input').forEach(el => {
+  if (!el.closest('#add-form')) el.addEventListener('change', refresh);
+});
+
+/* 自訂餐廳（LocalStorage） */
+function renderCustomList(){
+  $('#custom-list').innerHTML = customRestaurants.map(r =>
+    `<div><span>${escapeHtml(r.name)}・${r.distanceMeters}m</span><button type="button" data-id="${r.id}" aria-label="刪除"><i class="fa-solid fa-xmark"></i></button></div>`
+  ).join('');
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+$('#add-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#add-name').value.trim();
+  const dist = Math.round(+$('#add-dist').value);
+  const cats = [...addCats.querySelectorAll('input:checked')].map(i => i.value);
+  if (!name || !dist) return;
+  customRestaurants.push({
+    id:'custom_' + Date.now(), name, distanceMeters:Math.min(Math.max(dist, 50), 2000),
+    hasAC:$('#add-ac').checked, categories:cats.length ? cats : ['小吃/其他'], priceRange:'', area:'自訂餐廳'
+  });
+  saveCustom(customRestaurants);
+  e.target.reset(); $('#add-ac').checked = true;
+  renderCustomList(); refresh();
+});
+$('#custom-list').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-id]');
+  if (!btn) return;
+  customRestaurants = customRestaurants.filter(r => r.id !== btn.dataset.id);
+  saveCustom(customRestaurants);
+  renderCustomList(); refresh();
+});
+renderCustomList();
+
+/* =====================================================================
+ * 5. 轉動動畫與 Ease-Out 演算法
+ * ===================================================================== */
+const SPIN_DURATION = 3000;  // 3 秒
+const POINTER_ANGLE = Math.PI / 2;  // 指針在正上方
+let spinning = false;
+let spinState = null;
+let idleSpeed = 0.0025;
+
+const easeOutQuart = t => 1 - Math.pow(1 - t, 4);
+
+function startSpin(){
+  if (spinning || !sectors.length) return;
+  closeModal();
+  spinning = true;
+  $('#spin-btn').disabled = true;
+  highlight(-1);
+
+  const pickIdx = Math.floor(Math.random() * sectors.length);
+  const s = sectors[pickIdx];
+  const seg = Math.PI * 2 / sectors.length;
+  // 在扇區內加一點隨機偏移，看起來更自然（不會每次正中）
+  const jitter = (Math.random() - .5) * seg * 0.6;
+  const start = wheel.rotation.z;
+  const targetMod = POINTER_ANGLE - (s.centerAngle + jitter);
+  const TAU = Math.PI * 2;
+  let delta = ((targetMod - start) % TAU + TAU) % TAU;
+  const end = start + delta + TAU * (5 + Math.floor(Math.random() * 3));
+
+  spinState = { start, end, t0:performance.now(), pickIdx, lastSector:-1 };
+}
+
+function currentSectorIndex(){
+  if (!sectors.length) return -1;
+  const TAU = Math.PI * 2;
+  const seg = TAU / sectors.length;
+  const local = ((POINTER_ANGLE - wheel.rotation.z) % TAU + TAU) % TAU;
+  return Math.floor(local / seg) % sectors.length;
+}
+
+function highlight(idx){
+  sectors.forEach((s, i) => {
+    s.mesh.material.emissive.setHex(i === idx ? 0x664000 : 0x000000);
+    s.label.material.color.setHex(i === idx ? 0xfff3c4 : 0xffffff);
+  });
+}
+
+/* --- 粒子特效（Confetti）--- */
+const confetti = [];
+const confettiGeo = new THREE.PlaneGeometry(0.14, 0.24);
+function burstConfetti(){
+  const colors = [0xff6b4a, 0xffb547, 0x46c2a8, 0x4a8fe7, 0xa56cf0, 0xf06c9b, 0xffffff];
+  for (let i = 0; i < 260; i++){
+    const m = new THREE.Mesh(confettiGeo, new THREE.MeshBasicMaterial({
+      color:colors[i % colors.length], side:THREE.DoubleSide, transparent:true
+    }));
+    m.position.set((Math.random() - .5) * 1.2, WHEEL_R + 0.6, WHEEL_DEPTH + 1);
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 0.08 + Math.random() * 0.18;
+    m.userData = {
+      v:new THREE.Vector3(Math.cos(ang) * sp, Math.random() * 0.22 + 0.05, (Math.random() - .3) * 0.18),
+      spin:new THREE.Vector3(Math.random() * .3, Math.random() * .3, Math.random() * .3),
+      life:0
+    };
+    stage.add(m);
+    confetti.push(m);
+  }
+}
+function updateConfetti(){
+  for (let i = confetti.length - 1; i >= 0; i--){
+    const m = confetti[i], d = m.userData;
+    d.life++;
+    d.v.y -= 0.0065;          // 重力
+    d.v.multiplyScalar(0.985); // 空氣阻力
+    m.position.add(d.v);
+    m.rotation.x += d.spin.x; m.rotation.y += d.spin.y; m.rotation.z += d.spin.z;
+    if (d.life > 120) m.material.opacity = Math.max(0, 1 - (d.life - 120) / 60);
+    if (d.life > 180){
+      stage.remove(m); m.material.dispose(); confetti.splice(i, 1);
+    }
+  }
+}
+
+/* --- 拖曳轉動視角 --- */
+let dragging = false, lastX = 0, lastY = 0;
+const tilt = { x:-0.38, y:0.0, tx:-0.38, ty:0.0 };
+renderer.domElement.addEventListener('pointerdown', e => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  tilt.ty = THREE.MathUtils.clamp(tilt.ty + (e.clientX - lastX) * 0.005, -0.9, 0.9);
+  tilt.tx = THREE.MathUtils.clamp(tilt.tx + (e.clientY - lastY) * 0.005, -1.1, 0.3);
+  lastX = e.clientX; lastY = e.clientY;
+});
+const endDrag = () => { dragging = false; };
+renderer.domElement.addEventListener('pointerup', endDrag);
+renderer.domElement.addEventListener('pointercancel', endDrag);
+
+/* --- 版面：桌機把輪盤放在側欄右邊；手機放上半部 --- */
+function layout(){
+  const w = innerWidth, h = innerHeight;
+  camera.aspect = w / h;
+  const mobile = w <= 760;
+  // 依可視區域調整相機距離，保證輪盤完整入鏡
+  const usableW = mobile ? w : w - 332;
+  const usableH = mobile ? h * 0.48 : h - 100;
+  const need = WHEEL_R * 2 + 2.2;
+  const vFov = THREE.MathUtils.degToRad(camera.fov);
+  const distH = (need / 2) / Math.tan(vFov / 2) * (h / usableH);
+  const distW = (need / 2) / Math.tan(vFov / 2) / camera.aspect * (w / usableW);
+  const dist = Math.max(distH, distW);
+  camera.position.set(0, 0, dist);
+  // 用 view offset 把畫面中心移到可用區域中心
+  const offX = mobile ? 0 : -166;
+  const offY = mobile ? h * 0.24 - 30 : -40;
+  camera.setViewOffset(w, h, offX, offY, w, h);
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+addEventListener('resize', layout);
+layout();
+
+/* --- 主迴圈 --- */
+let frame = 0;
+function animate(now){
+  requestAnimationFrame(animate);
+  frame++;
+
+  // 視角平滑跟隨
+  tilt.x += (tilt.tx - tilt.x) * 0.12;
+  tilt.y += (tilt.ty - tilt.y) * 0.12;
+  stage.rotation.x = tilt.x;
+  stage.rotation.y = tilt.y + Math.sin(now * 0.0004) * 0.04;
+
+  if (spinState){
+    const t = Math.min(1, (now - spinState.t0) / SPIN_DURATION);
+    wheel.rotation.z = spinState.start + (spinState.end - spinState.start) * easeOutQuart(t);
+    const idx = currentSectorIndex();
+    if (idx !== spinState.lastSector){
+      spinState.lastSector = idx;
+      pointer.rotation.z = 0.35;  // 指針被扇區撥動
+    }
+    if (t >= 1){
+      const picked = sectors[spinState.pickIdx];
+      spinState = null;
+      spinning = false;
+      highlight(currentSectorIndex());
+      burstConfetti();
+      setTimeout(() => showResult(picked.restaurant), 650);
+      $('#spin-btn').disabled = currentList.length === 0;
+    }
+  } else if (!spinning && !modalOpen){
+    wheel.rotation.z += idleSpeed;   // 待機微弱旋轉
+  }
+  pointer.rotation.z *= 0.82;
+
+  // 燈泡跑馬燈
+  bulbs.forEach((b, i) => {
+    const on = spinning ? ((i + Math.floor(now / 60)) % 3 === 0) : ((i + Math.floor(now / 400)) % 2 === 0);
+    b.material.emissiveIntensity = on ? 1.4 : 0.15;
+  });
+
+  updateConfetti();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+/* =====================================================================
+ * 6. UI 事件監聽與結果呈現
+ * ===================================================================== */
+let modalOpen = false;
+function showResult(r){
+  $('#r-name').textContent = r.name;
+  $('#r-area').textContent = r.area || '';
+  const mins = Math.max(1, Math.round(r.distanceMeters / 75));
+  $('#r-dist').innerHTML = `<i class="fa-solid fa-person-walking"></i>約 ${r.distanceMeters.toLocaleString()} 公尺，步行約 ${mins} 分鐘`;
+  const tags = [];
+  tags.push(r.hasAC ? '<span class="tag ac"><i class="fa-solid fa-snowflake"></i> 有冷氣</span>' : '<span class="tag">無冷氣</span>');
+  r.categories.forEach(c => tags.push(`<span class="tag">${escapeHtml(c)}</span>`));
+  if (r.priceRange) tags.push(`<span class="tag price">${r.priceRange}</span>`);
+  $('#r-tags').innerHTML = tags.join('');
+  $('#r-map').href = mapUrl(r);
+  $('#result-modal').classList.remove('hidden');
+  modalOpen = true;
+  $('#r-again').focus();
+}
+function closeModal(){
+  $('#result-modal').classList.add('hidden');
+  modalOpen = false;
+}
+
+$('#spin-btn').addEventListener('click', startSpin);
+$('#r-again').addEventListener('click', () => { closeModal(); setTimeout(startSpin, 250); });
+$('#r-refilter').addEventListener('click', () => {
+  closeModal(); highlight(-1);
+  const panel = $('#ui-container');
+  panel.scrollTo({ top:0, behavior:'smooth' });
+  panel.animate([{ boxShadow:'0 0 0 3px #ffb547' }, { boxShadow:'0 10px 40px rgba(0,0,0,.35)' }], { duration:900 });
+  panel.querySelector('input[name=dist]:checked').focus();
+});
+$('#result-modal').addEventListener('click', e => { if (e.target.id === 'result-modal') closeModal(); });
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+  if ((e.key === ' ' || e.key === 'Enter') && document.activeElement === document.body) { e.preventDefault(); startSpin(); }
+});
+
+refresh();
+</script>
+</body>
+</html>
