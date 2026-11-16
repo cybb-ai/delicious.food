@@ -195,7 +195,9 @@ function setup() {
   daily.getRange('D:D').setNumberFormat('"NT$"#,##0');
   daily.setFrozenRows(1);
 
-  SpreadsheetApp.getUi().alert('設定完成！接著請「部署 → 新增部署作業 → 網頁應用程式」。');
+  // 用右下角提示取代會卡住執行的對話框
+  ss.toast('訂單、訂單明細、每日統計已設定完成', '煎好日', 8);
+  console.log('設定完成');
 }
 
 function ensureSheet_(ss, name, headers) {
@@ -229,7 +231,7 @@ function markReady() { markSelected_('可取餐'); }
 function markDone() { markSelected_('已完成'); }
 function markSelected_(status) {
   var sh = SpreadsheetApp.getActiveSheet();
-  if (sh.getName() !== SHEET_ORDERS) { SpreadsheetApp.getUi().alert('請在「訂單」工作表選取訂單列'); return; }
+  if (sh.getName() !== SHEET_ORDERS) { SpreadsheetApp.getActive().toast('請在「訂單」工作表選取訂單列', '煎好日', 5); return; }
   var r = sh.getActiveRange(), now = new Date();
   for (var i = r.getRow(); i < r.getRow() + r.getNumRows(); i++) {
     if (i < 2) continue;
