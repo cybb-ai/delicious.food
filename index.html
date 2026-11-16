@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#38271f">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#38271f"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="煎好日"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>煎好日｜一口金黃，日日好食</title><meta name="description" content="煎好日鍋貼專賣：現點現煎、嚴選食材。探索菜單、冷凍禮盒與門市資訊。">
 <link rel="stylesheet" href="assets/styles.css">
 <script src="assets/lucide.min.js" defer></script>
@@ -67,4 +67,4 @@ $('#mobileMenuButton').onclick=()=>{const nav=$('#mobileNav'),expanded=nav.class
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#privacyModal').classList.contains('hidden'))closePrivacy();else if(!$('#checkoutModal').classList.contains('hidden'))closeCheckout();else if($('#cartDrawer').classList.contains('open'))closeCart()}});
 renderTabs();renderMenu();renderLocations();updateCart();window.addEventListener('load',icons);
 </script>
-</body></html>
+<script>if("serviceWorker"in navigator){addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}</script></body></html>
