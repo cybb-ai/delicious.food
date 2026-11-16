@@ -1,5 +1,5 @@
 /* 煎好日 service worker: offline shell + runtime caching */
-var VERSION = 'jgd-v3';
+var VERSION = 'jgd-v4';
 var CORE = [
   './',
   'index.html',
@@ -30,7 +30,7 @@ self.addEventListener('fetch', function (e) {
 
   /* pages: network first so updates show immediately, fall back to cache offline */
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(function (res) {
+    e.respondWith(fetch(req, { cache: 'no-store' }).then(function (res) {
       var copy = res.clone();
       caches.open(VERSION).then(function (c) { c.put('index.html', copy); });
       return res;
